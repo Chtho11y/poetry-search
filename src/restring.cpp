@@ -1,3 +1,4 @@
+
 #include "restring.h"
 
 std::unordered_map<uint32_t, int16_t> ReString::char_map;
@@ -135,8 +136,12 @@ size_t ReString::estimateMapMemoryUse() {
 
 std::vector<HanziData> ReString::hanzi_data;
 
-void ReString::loadHanziData(const std::string& filename) {
-    hanzi_data = readHanziData(filename);
+bool ReString::loadHanziData(const std::string& filename) {
+    auto res = readHanziData(filename);
+    if(!res.has_value()) {
+        return false;
+    }
+    hanzi_data = res.value();
     for (auto & hanzi : hanzi_data) {
         int pos = 0;
         auto [cp, _] = nextUtf8Codepoint(hanzi.character, pos);
@@ -144,4 +149,5 @@ void ReString::loadHanziData(const std::string& filename) {
         char_map[cp] = idx;
         code_map[idx] = cp;
     }
+    return true;
 }

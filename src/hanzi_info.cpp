@@ -1,13 +1,13 @@
 #include "restring.h"
 
-std::vector<HanziData> readHanziData(const std::string& filename) {
+std::optional<std::vector<HanziData>> readHanziData(const std::string& filename) {
     std::vector<HanziData> hanziList;
     
     try {
         // 读取JSON文件
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "无法打开文件: " << filename << std::endl;
+            std::cerr << "Failed to open " << filename << std::endl;
             return hanziList;
         }
         
@@ -51,10 +51,8 @@ std::vector<HanziData> readHanziData(const std::string& filename) {
             hanziList.push_back(hanzi);
         }
         
-        std::cout << "成功读取 " << hanziList.size() << " 个汉字数据" << std::endl;
-        
     } catch (const std::exception& e) {
-        std::cerr << "读取文件时发生错误: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
     }
 
     for (size_t i = 0; i < hanziList.size(); ++i) {

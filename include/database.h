@@ -15,6 +15,8 @@ struct PoetryItem {
     ReString content;
     std::vector<ReString> sentences;
 
+    PoetryItem(){}
+
     size_t estimateMemoryUsage() const;
 };
 
@@ -23,7 +25,7 @@ private:
     std::vector<PoetryItem> poetry_items_;
 
 public:
-    bool loadFromCSV(const std::string& filename);
+    int loadFromCSV(const std::string& filename);
     
     const std::vector<PoetryItem>& getAllPoetry() const;
 
@@ -33,6 +35,8 @@ public:
     findSentencesByCharSet(const std::string& charset_utf8);
 
     PoetryItem getPoetryById(size_t id) const;
+
+    static std::vector<ReString> splitSentences(const ReString& content);
 
 private:
     bool parseCSVLine(std::string& line, 
@@ -45,5 +49,18 @@ private:
 
     static bool isSentenceTerminator(uint16_t ch);
 
-    static std::vector<ReString> splitSentences(const ReString& content);
+    void insertItem(std::string& title, 
+                    std::string& dynasty, 
+                    std::string& author, 
+                    std::string& content){
+        auto id = poetry_items_.size();
+        PoetryItem item;
+        item.id = id;
+        item.title = title;
+        item.dynasty = dynasty;
+        item.author = author;
+        item.content = ReString(content, true);
+        item.sentences = splitSentences(item.content);
+        poetry_items_.emplace_back(std::move(item));
+    }
 };

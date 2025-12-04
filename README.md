@@ -8,8 +8,16 @@
 
 古诗数据库：https://github.com/Werneror/Poetry
 
-自行下载后按指引执行 merge.py 获取poetry.csv
+该文件过大，自行下载后按指引执行 merge.py 获取poetry.csv
 
 
 # 构建
 
+```
+mkdir build
+cd build
+cmake -A x64 ..
+cmake --build . --config Release
+```
+
+确保你已经安装 cmake MSVC 和 python.

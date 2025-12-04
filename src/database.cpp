@@ -1,4 +1,6 @@
 #include "database.h"
+#include <cstdlib>
+
 
 size_t PoetryItem::estimateMemoryUsage() const {
     size_t total = sizeof(PoetryItem);
@@ -14,36 +16,60 @@ size_t PoetryItem::estimateMemoryUsage() const {
     return total;
 }
 
-bool PoetryDatabase::loadFromCSV(const std::string& filename) {
-    std::ifstream file(filename);
-    if (!file.is_open()) {
+int PoetryDatabase::loadFromCSV(const std::string& filename) {
+    FILE* file = std::fopen(filename.c_str(), "r");
+
+    if (!file) {
         return false;
     }
 
-    std::string line;
-    std::getline(file, line);
-    
-    while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        
-        std::string title, dynasty_name, author, content;
-        
-        if (!parseCSVLine(line, title, dynasty_name, author, content)) {
-            continue;
-        }
+    const size_t BUFFER_SIZE = 4 << 20; // 4MB
+    std::vector<char> buffer(BUFFER_SIZE);
+    std::string line_buf;
 
-        PoetryItem item;
-        item.content = content;
-        item.title = title;
-        item.sentences = splitSentences(content);
-        item.dynasty = dynasty_name;
-        item.author = author;
-        item.id = poetry_items_.size();
-        
-        poetry_items_.push_back(item);
+    int line_cnt = 0;
+    while (true) {
+        size_t bytes_read = std::fread(buffer.data(), 1, BUFFER_SIZE, file);
+        if (bytes_read == 0) break;
+
+        char* p = buffer.data();
+        char* end = buffer.data() + bytes_read;
+
+        while(p < end){
+            char* nl = (char*)memchr(p, '\n', end - p);
+            if (!nl) {
+                line_buf.append(p, end - p);
+                break;
+            }
+            line_buf.append(p, nl - p);
+            p = nl + 1;
+            if (line_cnt == 0) {
+                line_cnt++;
+                line_buf.clear();
+                continue; // skip header
+            }
+
+            if (!line_buf.empty()) {
+                std::string title, dynasty, author, content;
+                if (parseCSVLine(line_buf, title, dynasty, author, content)) {
+                    insertItem(title, dynasty, author, content);
+                    line_cnt++;
+                }
+            }
+
+            line_buf.clear();
+        }
     }
-    
-    return true;
+
+    if (!line_buf.empty() && line_cnt > 0) {
+        std::string title, dynasty, author, content;
+        if (parseCSVLine(line_buf, title, dynasty, author, content)) {
+            insertItem(title, dynasty, author, content);
+            line_cnt++;
+        }
+    }
+
+    return line_cnt <= 1 ? 0 : line_cnt - 1; // exclude header
 }
 
 const std::vector<PoetryItem>& PoetryDatabase::getAllPoetry() const {

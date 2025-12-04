@@ -24,7 +24,7 @@ struct HanziData {
 };
 
 // 读取汉字数据文件的函数
-std::vector<HanziData> readHanziData(const std::string& filename);
+std::optional<std::vector<HanziData>> readHanziData(const std::string& filename);
 
 struct ReString : std::vector<uint16_t> {
     static std::unordered_map<uint32_t, int16_t> char_map;
@@ -57,5 +57,5 @@ struct ReString : std::vector<uint16_t> {
 
     static size_t estimateMapMemoryUse();
 
-    static void loadHanziData(const std::string& filename);
+    static bool loadHanziData(const std::string& filename);
 };

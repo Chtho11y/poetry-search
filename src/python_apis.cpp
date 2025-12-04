@@ -16,7 +16,23 @@ public:
         int tim = clock();
         auto res = db_.loadFromCSV(filename);
         tim = clock() - tim;
-        std::cout << "Loaded "<< db_.getAllPoetry().size() <<" poems in " << (tim / 1000.0) << " seconds." << std::endl;
+        if(res > 0){
+            std::cout << "Loaded "<< res <<" poems in " << (tim / 1000.0) << " seconds." << std::endl;
+        }else{
+            std::cout << "Failed to load poetry data from " << filename << std::endl;
+        }
+        return res;
+    }
+
+    bool load_hanzi_info(const std::string& filename) {
+        int tim = clock();
+        auto res = ReString::loadHanziData(filename);
+        tim = clock() - tim;
+        if (res) {
+            std::cout << "Loaded " << ReString::hanzi_data.size() << " hanzi data in " << (tim / 1000.0) << " seconds." << std::endl;
+        }else{
+            std::cout << "Failed to load hanzi data from " << filename << std::endl;
+        }
         return res;
     }
 
@@ -75,6 +91,9 @@ PYBIND11_MODULE(poetry_search, m) {
         .def(py::init<>())
         .def("load", &Database::load, "Load poetry data from CSV file",
              py::arg("filename"))
+        .def("load_hanzi_info", &Database::load_hanzi_info,
+             "Load hanzi information from JSON file",
+             py::arg("filename"))
         .def("covered", &Database::find_sentences_by_charset, 
              "Find sentences that only contain specified characters",
              py::arg("charset"))
@@ -93,7 +112,8 @@ PYBIND11_MODULE(poetry_search, m) {
 /*
 from poetry_search import Database
 db = Database()
-db.load("../../../poetry.csv")
+db.load_hanzi_info("hanzi_data.json") 
+db.load("poetry.csv")
 db.get_poetry_count()
 db.get_memory_usage()
 */
