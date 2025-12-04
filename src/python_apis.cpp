@@ -1,9 +1,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
+#include <ctime>
 
 #include "database.h"
-#include <ctime>
+#include "cond_parser.h"
+
 
 namespace py = pybind11;
 
@@ -136,6 +138,14 @@ public:
             throw std::runtime_error("Character index not found");
         }
     }
+
+    static std::string parse_cond(const std::string& cond_str) {
+        auto cond = parseCond(cond_str);
+        if(cond){
+            return cond->toString();
+        }
+        return "Invalid condition";
+    }
 };
 
 PYBIND11_MODULE(poetry_search, m) {
@@ -175,7 +185,10 @@ PYBIND11_MODULE(poetry_search, m) {
                     "Get Hanzi information by character index",
                     py::arg("index"))
         .def_static("get_mapped_char_count", &Database::get_mapped_char_count,
-                    "Get number of mapped characters");
+                    "Get number of mapped characters")
+        .def_static("parse_cond", &Database::parse_cond,
+                    "Parse a condition string into structured format",
+                    py::arg("cond_str"));
 }
 
 /*

@@ -1,232 +1,250 @@
-// #pragma once
+#pragma once
 
-// #include <memory>
-// #include <vector>
-// #include <string>
-// #include <cstdint>
+#include <memory>
+#include <vector>
+#include <string>
+#include <cstdint>
 
-// #include "restring.h"
+#include "restring.h"
 
-// struct Cond{
-//     enum class CondType{
-//         Base,
-//         Comb,
-//         Option,
-//         List
-//     };
+std::pair<uint32_t, uint32_t> readUTF8Char(const std::string& str, size_t& pos, bool movePos = true);
 
-//     enum class BaseCondType{
-//         Character,
-//         Strokes,
-//         Pinyin,
-//         Frequency,
-//         Structure,
-//         Chaizi,
-//         Wildcard
-//     };
+struct utf8stream{
+    std::string str;
+    size_t pos = 0, last_delta = 0;
 
-//     virtual ~Cond() = default;
-// };
+    static const uint32_t INVALID_CP = 0xFFFFFFFEu;
+    static const uint32_t EOF_CP = 0xFFFFFFFFu;
 
-// uint32_t readUTF8Char(const std::string& str, size_t& pos, bool movePos = true);
+    utf8stream(std::string str): str(str){}
 
-// struct utf8stream{
-//     std::string str;
-//     size_t pos = 0;
+    uint32_t read(){
+        auto [cp, len] = readUTF8Char(str, pos);
+        if (cp == INVALID_CP)
+            throw std::invalid_argument("invalid utf8 char at " + std::to_string(pos) + " byte in " + str);
+        last_delta = len;
+        return cp;
+    }
 
-//     utf8stream(std::string str): str(str){}
+    uint32_t read_nonblanks(){
+        skip_blanks();
+        return read();
+    }
 
-//     uint32_t read(){
-//         auto cp = readUTF8Char(str, pos);
-//         if (cp == INVALID_CODE_POINT)
-//             throw std::invalid_argument("invalid utf8 char at " + std::to_string(pos) + " byte in " + str);
-//         return cp;
-//     }
+    int read_int(){
+        auto [ch, len] = readUTF8Char(str, pos);
+        if(!isdigit(ch))
+            throw std::invalid_argument("expected digit at " + std::to_string(pos) + " byte in " + str);
+        std::string numStr;
+        numStr += ch;
+        while(pos < str.size()){
+            ch = readUTF8Char(str, pos, false).first;
+            if(!isdigit(ch))
+                break;
+            readUTF8Char(str, pos);
+            numStr += ch;
+        }
+        return std::stoi(numStr);
+    }
 
-//     uint32_t read_nonblanks(){
-//         skip_blanks();
-//         return read();
-//     }
+    uint32_t peek(){
+        return readUTF8Char(str, pos, false).first;
+    }
 
-//     int read_int(){
-//         uint32_t ch = readUTF8Char(str, pos);
-//         if(!isdigit(ch))
-//             throw std::invalid_argument("expected digit at " + std::to_string(pos) + " byte in " + str);
-//         std::string numStr;
-//         numStr += ch;
-//         while(pos < str.size()){
-//             ch = readUTF8Char(str, pos, false);
-//             if(!isdigit(ch))
-//                 break;
-//             readUTF8Char(str, pos);
-//             numStr += ch;
-//         }
-//         return std::stoi(numStr);
-//     }
+    bool eof(){
+        return pos >= str.size();
+    }
 
-//     uint32_t peek(){
-//         return readUTF8Char(str, pos, false);
-//     }
+    bool has_next(){
+        return pos < str.size();
+    }
 
-//     bool eof(){
-//         return pos >= str.size();
-//     }
+    size_t tell(){
+        return pos;
+    }
 
-//     bool has_next(){
-//         return pos < str.size();
-//     }
+    void seek(size_t pos){
+        this->pos = pos;
+    }
 
-//     size_t tell(){
-//         return pos;
-//     }
+    void rollback(){
+        if(last_delta > pos)
+            pos = 0;
+        else
+            pos -= last_delta;
+    }
 
-//     void seek(size_t pos){
-//         this->pos = pos;
-//     }
+    void skip_blanks(){
+        while(pos < str.size()){
+            auto [ch, _] = readUTF8Char(str, pos, false);
+            if(ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r')
+                break;
+            readUTF8Char(str, pos);
+        }
+    }
+};
 
-//     void rollback(size_t delta = 1){
-//         if(delta > pos)
-//             pos = 0;
-//         else
-//             pos -= delta;
-//     }
+struct Cond{
+    enum class CondType{
+        Base,
+        Comb,
+        Option,
+        List
+    };
 
-//     void skip_blanks(){
-//         while(pos < str.size()){
-//             auto ch = readUTF8Char(str, pos, false);
-//             if(ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r')
-//                 break;
-//             readUTF8Char(str, pos);
-//         }
-//     }
-// };
+    enum class BaseCondType{
+        Character,
+        Strokes,
+        Pinyin,
+        Frequency,
+        Structure,
+        Chaizi,
+        Wildcard
+    };
 
-// using cond_ptr = std::shared_ptr<Cond>;
+    CondType type;
 
-// struct BaseCond: Cond{
-//     Cond::BaseCondType baseType = Cond::BaseCondType::Character;
+    Cond(){}
+    virtual ~Cond() = default;
 
-//     BaseCond(Cond::BaseCondType type): baseType(type){}
-// };
+    virtual std::string toString() const {
+        return "BaseCond";
+    }
+};
 
-// struct CharCond: BaseCond{
-//     uint16_t ch;
+using cond_ptr = std::shared_ptr<Cond>;
 
-//     CharCond(std::string value): BaseCond(Cond::BaseCondType::Character){
-//         size_t pos = 0;
-//         ch = readUTF8Char(value, pos);
-//         if(pos != value.size()){
-//             throw std::invalid_argument("invalid character cond: " + value);
-//         }
-//     }
-// };
+struct BaseCond: Cond{
+    Cond::BaseCondType baseType = Cond::BaseCondType::Character;
 
-// struct FreqCond: BaseCond{
-//     int freq;
+    BaseCond(Cond::BaseCondType type): baseType(type){}
+};
 
-//     FreqCond(std::string value): BaseCond(Cond::BaseCondType::Frequency){
-//         freq = std::stoi(value);
-//     }
-// };
+struct CharCond: BaseCond{
+    uint16_t ch;
 
-// struct StrokeCond: BaseCond{
-//     int strokes;
+    CharCond(uint32_t cp): BaseCond(Cond::BaseCondType::Character){
+        ch = ReString::getCode(cp);
+    }
 
-//     StrokeCond(std::string value): BaseCond(Cond::BaseCondType::Strokes){
-//         strokes = std::stoi(value);
-//     }
-// };
+    std::string toString() const override {
+        return "\'" + ReString::codepointToString(ReString::getUtf8Code(ch)) + "\'";
+    }
+};
 
-// struct StructCond: BaseCond{
-//     char group;
-//     int subGroup;
-//     StructCond(std::string value): BaseCond(Cond::BaseCondType::Structure){
-//         if(value.size() == 0 || value.size() > 2 || !isalpha(value[0]) || (value.size() == 2 && !isdigit(value[1]))){
-//             throw std::invalid_argument("invalid structure cond: " + value);
-//         }
-//         group = value[0];
-//         subGroup = value.size() == 2 ? value[1] - '0' : 0;
-//     }
-// };
+struct WildcardCond: BaseCond{
+    WildcardCond(): BaseCond(Cond::BaseCondType::Wildcard){}
 
-// struct CombCond: Cond{
-//     std::vector<cond_ptr> conds;
-// };
+    std::string toString() const override {
+        return "Any";
+    }
+};
 
-// struct OptionCond: Cond{
-//     std::vector<cond_ptr> conds;
-// };
+struct FreqCond: BaseCond{
+    int freq;
 
-// struct CondList: Cond{
-//     std::vector<cond_ptr> conds;
-// };
+    FreqCond(int value): BaseCond(Cond::BaseCondType::Frequency){
+        freq = value;
+    }
 
-// std::shared_ptr<BaseCond> parseBaseCond(utf8stream& stream){
-//     auto baseCond = std::make_shared<BaseCond>();
-//     while (stream.has_next()){
-//         auto ch = stream.read_nonblanks();
-//         if (ch == EOF_CP)
-//             throw std::invalid_argument("unexpected end of string in the end of \"" + stream.str + "\"");
+    std::string toString() const override {
+        return "Freq=" + std::to_string(freq);
+    }
+};
 
-//         if (ch == '*'){
-//             baseCond = std::make_shared<BaseCond>("*", Cond::BaseCondType::Wildcard);
-//             break;
-//         }else if (ch == '$'){
-//             int freq = stream.read_int();
-//             baseCond = std::make_shared<FreqCond>(std::to_string(freq));
-//             break;
-//         }else if (ch == '@'){
-//             std::string structStr;
-            
-//             break;
-//         }else if (isdigit(ch)){
-//             stream.rollback();
-//             int strokes = stream.read_int();
-//             baseCond = std::make_shared<StrokeCond>(std::to_string(strokes));
-//             break;
-//         }else if (isalpha(ch)){
-            
-//         } else {
+struct StrokeCond: BaseCond{
+    int strokes;
 
-//         }
-//         break;
-//     }
-//     return baseCond;
-// }
+    StrokeCond(int value): BaseCond(Cond::BaseCondType::Strokes){
+        strokes = value;
+    }
 
-// std::shared_ptr<CombCond> parseCombCond(utf8stream& stream){
-//     auto combCond = std::make_shared<CombCond>();
-//     //解析token
-//     return combCond;
-// }
+    std::string toString() const override {
+        return "Stroke=" + std::to_string(strokes);
+    }
+};
 
-// std::shared_ptr<OptionCond> parseOptionCond(utf8stream& stream){
-//     auto optionCond = std::make_shared<OptionCond>();
-//     //解析token
-//     return optionCond;
-// }
+struct StructCond: BaseCond{
+    char group;
+    int subGroup;
+    StructCond(std::string value): BaseCond(Cond::BaseCondType::Structure){
+        if(value.size() == 0 || value.size() > 2 || !isalpha(value[0]) || (value.size() == 2 && !isdigit(value[1]))){
+            throw std::invalid_argument("invalid structure cond: " + value);
+        }
+        group = value[0];
+        subGroup = value.size() == 2 ? value[1] - '0' : 0;
+    }
 
-// std::shared_ptr<CondList> parseCondList(utf8stream& stream){
-//     auto condList = std::make_shared<CondList>();
-//     while(stream.has_next()){
-//         auto ch = stream.read_nonblanks();
-//         if(ch == EOF_CP)
-//             break;
+    std::string toString() const override {
+        return "Struct=" + std::string(1, group) + (subGroup > 0 ? std::to_string(subGroup) : "");
+    }
+};
 
-//         if(ch == '['){
-//             auto optionCond = parseOptionCond(stream);
-//             condList->conds.push_back(optionCond);
-//         }else{
-//             auto baseCond = parseBaseCond(stream);
-//             condList->conds.push_back(baseCond);
-//         }
-//     }
-//     return condList;
-// }
+struct PinyinCond: BaseCond{
+    std::string pinyin;
 
-// std::shared_ptr<CondList> parseCond(const std::string& condStr){
-//     std::vector<cond_ptr> conds;
+    PinyinCond(std::string value): BaseCond(Cond::BaseCondType::Pinyin){
+        pinyin = value;
+    }
 
-//     utf8stream stream(condStr);
-//     return parseCondList(stream);
-// }
+    std::string toString() const override {
+        return "Pinyin=" + pinyin;
+    }
+};
+
+struct CombCond: Cond{
+    std::vector<cond_ptr> conds;
+
+    CombCond() {
+        type = Cond::CondType::Comb;
+    }
+
+    std::string toString() const override {
+        std::string result = "CombCond: [ ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += "]";
+        return result;
+    }
+};
+
+struct OptionCond: Cond{
+    std::vector<cond_ptr> conds;
+
+    OptionCond() {
+        type = Cond::CondType::Option;
+    }
+
+    std::string toString() const override {
+        std::string result = "OptionCond: { ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += "}";
+        return result;
+    }
+};
+
+struct CondList: Cond{
+    std::vector<cond_ptr> conds;
+
+    CondList() {
+        type = Cond::CondType::List;
+    }
+
+    std::string toString() const override {
+        std::string result = "CondList: ( ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += ")";
+        return result;
+    }
+};
+
+std::shared_ptr<BaseCond> parseBaseCond(utf8stream& stream);
+std::shared_ptr<CombCond> parseCombCond(utf8stream& stream);
+std::shared_ptr<OptionCond> parseOptionCond(utf8stream& stream);
+std::shared_ptr<CondList> parseCondList(utf8stream& stream);
+std::shared_ptr<CondList> parseCond(const std::string& condStr);
