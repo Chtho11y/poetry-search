@@ -1,0 +1,15 @@
+# 数据源
+
+拆字字典： https://github.com/kfcd/chaizi
+
+汉字字典：https://github.com/mapull/chinese-dictionary
+
+上述字典已经过处理后内置于 `resource/hanzi_data.json`
+
+古诗数据库：https://github.com/Werneror/Poetry
+
+自行下载后按指引执行 merge.py 获取poetry.csv
+
+
+# 构建
+
