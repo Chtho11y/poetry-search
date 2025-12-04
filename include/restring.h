@@ -11,7 +11,7 @@
 using json = nlohmann::json;
 
 // 汉字数据结构
-struct HanziData {
+struct HanziDataJson {
     int index;
     std::string character;
     std::string traditional;  // 可能为空
@@ -24,13 +24,18 @@ struct HanziData {
 };
 
 // 读取汉字数据文件的函数
-std::optional<std::vector<HanziData>> readHanziData(const std::string& filename);
+std::optional<std::vector<HanziDataJson>> readHanziData(const std::string& filename);
+
+struct ReString;
+
+struct HanziData;
 
 struct ReString : std::vector<uint16_t> {
+
     static std::unordered_map<uint32_t, int16_t> char_map;
     static std::unordered_map<uint16_t, uint32_t> code_map;
 
-    static std::vector<HanziData> hanzi_data;
+    static std::unordered_map<uint16_t, HanziData> hanzi_data;
 
     ReString() = default;
     ReString(const std::string& s, bool create_new = true);
@@ -58,4 +63,16 @@ struct ReString : std::vector<uint16_t> {
     static size_t estimateMapMemoryUse();
 
     static bool loadHanziData(const std::string& filename);
+};
+
+struct HanziData {
+    uint16_t index;
+    ReString character;
+    ReString traditional;
+    int strokes;
+    std::vector<std::string> pinyin;
+    ReString radicals;
+    int frequency;
+    std::string structure;
+    std::vector<ReString> chaizi;
 };

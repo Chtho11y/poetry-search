@@ -1,37 +1,31 @@
 #include "restring.h"
 
-std::optional<std::vector<HanziData>> readHanziData(const std::string& filename) {
-    std::vector<HanziData> hanziList;
+std::optional<std::vector<HanziDataJson>> readHanziData(const std::string& filename) {
+    std::vector<HanziDataJson> hanziList;
     
     try {
-        // 读取JSON文件
         std::ifstream file(filename);
         if (!file.is_open()) {
             std::cerr << "Failed to open " << filename << std::endl;
             return hanziList;
         }
         
-        // 解析JSON
         json j;
         file >> j;
         
-        // 遍历所有汉字数据
         for (const auto& item : j) {
-            HanziData hanzi;
+            HanziDataJson hanzi;
             
-            // 解析必需字段
             hanzi.index = item["index"];
             hanzi.character = item["char"];
             hanzi.strokes = item["strokes"];
             hanzi.radicals = item["radicals"];
             hanzi.frequency = item["frequency"];
             
-            // 解析拼音数组
             for (const auto& py : item["pinyin"]) {
                 hanzi.pinyin.push_back(py);
             }
             
-            // 解析可选字段
             if (item.contains("traditional")) {
                 hanzi.traditional = item["traditional"];
             }

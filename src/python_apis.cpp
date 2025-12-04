@@ -7,6 +7,51 @@
 
 namespace py = pybind11;
 
+struct HanziPyInfo {
+    std::string character;
+    std::string traditional;
+    int strokes;
+    int frequency;
+    std::string radicals;
+    std::string structure;
+    std::vector<std::string> chaizi;
+    std::vector<std::string> pinyin;
+
+    HanziPyInfo(const HanziData& hd)
+        : character(hd.character.toString()),
+          traditional(hd.traditional.toString()),
+          strokes(hd.strokes),
+          frequency(hd.frequency),
+          radicals(hd.radicals.toString()),
+          structure(hd.structure),
+          pinyin(hd.pinyin) {
+        for (const auto& cz : hd.chaizi) {
+            chaizi.push_back(cz.toString());
+        }
+    }
+
+    std::string toString(){
+        std::string result;
+        result += "Character: " + character + "\n";
+        result += "Traditional: " + traditional + "\n";
+        result += "Strokes: " + std::to_string(strokes) + "\n";
+        result += "Pinyin: [ ";
+        for (const auto& py : pinyin) {
+            result += py + " ";
+        }
+        result += "]\n";
+        result += "Frequency: " + std::to_string(frequency) + "\n";
+        result += "Radicals: " + radicals + "\n";
+        result += "Structure: " + structure + "\n";
+        result += "Components: ";
+        for (const auto& cz : chaizi) {
+            result += cz + " ";
+        }
+        result += "\n";
+        return result;
+    }
+};
+
 class Database {
 private:
     PoetryDatabase db_;
@@ -82,10 +127,31 @@ public:
     static size_t get_mapped_char_count() {
         return ReString::char_map.size();
     }
+
+    static HanziPyInfo get_char_info(int index) {
+        auto it = ReString::hanzi_data.find(static_cast<uint16_t>(index));
+        if (it != ReString::hanzi_data.end()) {
+            return HanziPyInfo(it->second);
+        } else {
+            throw std::runtime_error("Character index not found");
+        }
+    }
 };
 
 PYBIND11_MODULE(poetry_search, m) {
     m.doc() = "Chinese poetry search library";
+
+    py::class_<HanziPyInfo>(m, "HanziInfo")
+        .def_readonly("character", &HanziPyInfo::character)
+        .def_readonly("traditional", &HanziPyInfo::traditional)
+        .def_readonly("strokes", &HanziPyInfo::strokes)
+        .def_readonly("frequency", &HanziPyInfo::frequency)
+        .def_readonly("radicals", &HanziPyInfo::radicals)
+        .def_readonly("structure", &HanziPyInfo::structure)
+        .def_readonly("chaizi", &HanziPyInfo::chaizi)
+        .def_readonly("pinyin", &HanziPyInfo::pinyin)
+        .def("__str__", &HanziPyInfo::toString,
+             "Get string representation of the Hanzi information");
 
     py::class_<Database>(m, "Database")
         .def(py::init<>())
@@ -105,6 +171,9 @@ PYBIND11_MODULE(poetry_search, m) {
              "Estimate memory usage of the database")
         .def("get_memory_usage", &Database::get_memory_usage,
                     "Get memory usage of character mapping tables and database")
+        .def_static("get_char_info", &Database::get_char_info,
+                    "Get Hanzi information by character index",
+                    py::arg("index"))
         .def_static("get_mapped_char_count", &Database::get_mapped_char_count,
                     "Get number of mapped characters");
 }

@@ -134,20 +134,32 @@ size_t ReString::estimateMapMemoryUse() {
     return total;
 }
 
-std::vector<HanziData> ReString::hanzi_data;
+std::unordered_map<uint16_t, HanziData> ReString::hanzi_data;
 
 bool ReString::loadHanziData(const std::string& filename) {
     auto res = readHanziData(filename);
     if(!res.has_value()) {
         return false;
     }
-    hanzi_data = res.value();
-    for (auto & hanzi : hanzi_data) {
+    auto& value = res.value();
+    for (auto & hanzi : value) {
         int pos = 0;
         auto [cp, _] = nextUtf8Codepoint(hanzi.character, pos);
-        uint16_t idx = hanzi.index - 1;
-        char_map[cp] = idx;
-        code_map[idx] = cp;
+        auto idx = getCodeOrCreate(cp);
+
+        HanziData hd;
+        hd.index = idx;
+        hd.character = ReString(hanzi.character);
+        hd.traditional = hanzi.traditional.empty() ? ReString() : ReString(hanzi.traditional);
+        hd.strokes = hanzi.strokes;
+        hd.frequency = hanzi.frequency;
+        hd.radicals = ReString(hanzi.radicals);
+        hd.structure = hanzi.structure;
+        for(auto & cz : hanzi.chaizi) {
+            hd.chaizi.push_back(ReString(cz));
+        }
+        hd.pinyin = hanzi.pinyin;
+        hanzi_data[idx] = hd;
     }
     return true;
 }
