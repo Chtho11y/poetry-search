@@ -132,3 +132,16 @@ size_t ReString::estimateMapMemoryUse() {
     total += (sizeof(uint16_t) + sizeof(uint32_t)) * code_map.size();
     return total;
 }
+
+std::vector<HanziData> ReString::hanzi_data;
+
+void ReString::loadHanziData(const std::string& filename) {
+    hanzi_data = readHanziData(filename);
+    for (auto & hanzi : hanzi_data) {
+        int pos = 0;
+        auto [cp, _] = nextUtf8Codepoint(hanzi.character, pos);
+        uint16_t idx = hanzi.index - 1;
+        char_map[cp] = idx;
+        code_map[idx] = cp;
+    }
+}
