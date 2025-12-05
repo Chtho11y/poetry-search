@@ -255,19 +255,24 @@ struct ChaiziCond: BaseCond{
 
         auto target_set = get_components(component);
         int las = -1;
+        
         for(const auto& cz : data.chaizi){
             auto cz_set = get_components(cz);
+            bool found = true;
             for(const auto& c : target_set){
                 if(c == las)
                     continue;
                 if(cz_set.count(c) < target_set.count(c)){
-                    return false;
+                    found = false;
+                    break;
                 }
                 las = c;
             }
+            if(found)
+                return true;
         }
 
-        return true;
+        return component == data.character;
     }
 };
 
@@ -301,7 +306,7 @@ struct CombCond: Cond{
         }
         auto size = ReString::char_map.size();
         cache.clear();
-        cache.resize(size, false);
+        cache.resize(size, true);
 
         for(auto& [code, data]: ReString::hanzi_data){
             for(const auto& c : conds){
