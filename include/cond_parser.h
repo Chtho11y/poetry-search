@@ -206,7 +206,9 @@ struct PinyinCond: BaseCond{
         pinyin = value;
         for(auto c: pinyin){
             if(c == '?'){
-                regex += ".*";
+                regex += "[a-zɡ]*";
+            }else if(c == 'g'){
+                regex += "[gɡ]";
             }else{
                 regex += c;
             }
@@ -217,15 +219,17 @@ struct PinyinCond: BaseCond{
     }
 
     std::string toString() const override {
-        return "Pinyin=" + pinyin;
+        return "Pinyin=" + regex;
     }
 
     virtual bool match(const HanziData& data) const override {
+        auto matcher = std::regex(regex);
         for(const auto& py : data.pinyin){
-            if(std::regex_match(py, std::regex(regex))){
+            if(std::regex_match(py, matcher)){
                 return true;
             }
         }
+        return false;
     }
 };
 

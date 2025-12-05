@@ -229,7 +229,7 @@ std::vector<cond_token> tokenizeCondString(const std::string& condStr){
             std::string alphaStr = ReString::codepointToString(cp);
             while (pos < condStr.size()) {
                 auto [nextCp, nextLen] = readUTF8Char(condStr, pos, false);
-                if (!is_alpha(nextCp) && cp != '?' && !is_digit(nextCp))
+                if (!is_alpha(nextCp) && nextCp != '?' && !is_digit(nextCp))
                     break;
                 readUTF8Char(condStr, pos);
                 alphaStr += ReString::codepointToString(nextCp);
