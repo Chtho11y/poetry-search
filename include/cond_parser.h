@@ -4,85 +4,42 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <set>
+#include <regex>
 
 #include "restring.h"
 
 std::pair<uint32_t, uint32_t> readUTF8Char(const std::string& str, size_t& pos, bool movePos = true);
 
-struct utf8stream{
-    std::string str;
-    size_t pos = 0, last_delta = 0;
+struct ParseException: public std::exception{
+    std::string message;
+    size_t pos_l, pos_r;
 
-    static const uint32_t INVALID_CP = 0xFFFFFFFEu;
-    static const uint32_t EOF_CP = 0xFFFFFFFFu;
-
-    utf8stream(std::string str): str(str){}
-
-    uint32_t read(){
-        auto [cp, len] = readUTF8Char(str, pos);
-        if (cp == INVALID_CP)
-            throw std::invalid_argument("invalid utf8 char at " + std::to_string(pos) + " byte in " + str);
-        last_delta = len;
-        return cp;
+    ParseException(std::string info, size_t pos_l, size_t pos_r)
+        : pos_l(pos_l), pos_r(pos_r){
+        message = info + " at position [" + std::to_string(pos_l) + ", " + std::to_string(pos_r) + ")";
     }
-
-    uint32_t read_nonblanks(){
-        skip_blanks();
-        return read();
-    }
-
-    int read_int(){
-        auto [ch, len] = readUTF8Char(str, pos);
-        if(!isdigit(ch))
-            throw std::invalid_argument("expected digit at " + std::to_string(pos) + " byte in " + str);
-        std::string numStr;
-        numStr += ch;
-        while(pos < str.size()){
-            ch = readUTF8Char(str, pos, false).first;
-            if(!isdigit(ch))
-                break;
-            readUTF8Char(str, pos);
-            numStr += ch;
-        }
-        return std::stoi(numStr);
-    }
-
-    uint32_t peek(){
-        return readUTF8Char(str, pos, false).first;
-    }
-
-    bool eof(){
-        return pos >= str.size();
-    }
-
-    bool has_next(){
-        return pos < str.size();
-    }
-
-    size_t tell(){
-        return pos;
-    }
-
-    void seek(size_t pos){
-        this->pos = pos;
-    }
-
-    void rollback(){
-        if(last_delta > pos)
-            pos = 0;
-        else
-            pos -= last_delta;
-    }
-
-    void skip_blanks(){
-        while(pos < str.size()){
-            auto [ch, _] = readUTF8Char(str, pos, false);
-            if(ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r')
-                break;
-            readUTF8Char(str, pos);
-        }
+    const char* what() const noexcept override {
+        return message.c_str();
     }
 };
+
+struct cond_token{
+    enum TokenType{
+        Char, Letters, Number, LBracket, RBracket, LSquare, RSquare, 
+        Comma, Quote, Lt, Gt, At, Hash, Dollar, Asterisk, QuestionMark,
+        And, Or, LParen, RParen
+    };
+    size_t nxt_pos;
+    std::pair<size_t, size_t> original_pos;
+    TokenType type;
+    std::string value;
+
+    cond_token(TokenType type, std::string value, size_t pos_l, size_t pos_r): 
+        type(type), value(value), nxt_pos(0), original_pos(pos_l, pos_r){}
+};
+
+std::vector<cond_token> tokenizeCondString(const std::string& condStr);
 
 struct Cond{
     enum class CondType{
@@ -103,7 +60,7 @@ struct Cond{
     };
 
     CondType type;
-    std::unordered_map<uint16_t, bool> matchCache;
+    std::vector<bool> cache;
 
     Cond(){}
     virtual ~Cond() = default;
@@ -114,6 +71,22 @@ struct Cond{
 
     virtual bool match(const HanziData& data) const {
         return false;
+    }
+
+    bool match(uint16_t code) const {
+        if(code >= cache.size())
+            return false;
+        return cache[code];
+    }
+
+    virtual void init(){
+        auto size = ReString::char_map.size();
+        cache.clear();
+        cache.resize(size, false);
+
+        for(auto& [code, data]: ReString::hanzi_data){
+            cache[code] = match(data);
+        }
     }
 };
 
@@ -139,6 +112,10 @@ struct CharCond: BaseCond{
     virtual bool match(const HanziData& data) const override {
         return data.index == ch;
     }
+
+    // void init() override {
+    //     //no op
+    // }
 };
 
 struct WildcardCond: BaseCond{
@@ -151,6 +128,10 @@ struct WildcardCond: BaseCond{
     virtual bool match(const HanziData&) const override {
         return true;
     }
+
+    // void init() override {
+    //     //no op
+    // }
 };
 
 struct FreqCond: BaseCond{
@@ -165,7 +146,7 @@ struct FreqCond: BaseCond{
     }
 
     virtual bool match(const HanziData& data) const override {
-        return data.frequency <= freq;
+        return data.frequency == freq;
     }
 };
 
@@ -192,7 +173,7 @@ struct StructCond: BaseCond{
         if(value.size() == 0 || value.size() > 2 || !isalpha(value[0]) || (value.size() == 2 && !isdigit(value[1]))){
             throw std::invalid_argument("invalid structure cond: " + value);
         }
-        group = value[0];
+        group = toupper(value[0]);
         subGroup = value.size() == 2 ? value[1] - '0' : 0;
     }
 
@@ -216,10 +197,23 @@ struct StructCond: BaseCond{
 };
 
 struct PinyinCond: BaseCond{
+
     std::string pinyin;
+    std::string regex;
+
 
     PinyinCond(std::string value): BaseCond(Cond::BaseCondType::Pinyin){
         pinyin = value;
+        for(auto c: pinyin){
+            if(c == '?'){
+                regex += ".*";
+            }else{
+                regex += c;
+            }
+        }
+        if(!pinyin.empty() && !isdigit(pinyin.back())){
+            regex += "[0-4]?";
+        }
     }
 
     std::string toString() const override {
@@ -228,10 +222,52 @@ struct PinyinCond: BaseCond{
 
     virtual bool match(const HanziData& data) const override {
         for(const auto& py : data.pinyin){
-            if(py == pinyin)
+            if(std::regex_match(py, std::regex(regex))){
                 return true;
+            }
         }
-        return false;
+    }
+};
+
+struct ChaiziCond: BaseCond{
+    ReString component;
+
+    ChaiziCond(const ReString& value): BaseCond(Cond::BaseCondType::Chaizi){
+        component = value;
+    }
+
+    ChaiziCond(uint16_t cp): BaseCond(Cond::BaseCondType::Chaizi){
+        component.push_back(cp);
+    }
+
+    std::string toString() const override {
+        return "Chaizi=" + component.toString();
+    }
+
+    virtual bool match(const HanziData& data) const override {
+        auto get_components = [](const ReString& rs){
+            std::multiset<uint16_t> s;
+            for (auto c : rs) {
+                s.insert(c);
+            }
+            return s;
+        };
+
+        auto target_set = get_components(component);
+        int las = -1;
+        for(const auto& cz : data.chaizi){
+            auto cz_set = get_components(cz);
+            for(const auto& c : target_set){
+                if(c == las)
+                    continue;
+                if(cz_set.count(c) < target_set.count(c)){
+                    return false;
+                }
+                las = c;
+            }
+        }
+
+        return true;
     }
 };
 
@@ -258,6 +294,24 @@ struct CombCond: Cond{
         }
         return true;
     }
+
+    void init() override {
+        for(const auto& c : conds){
+            c->init();
+        }
+        auto size = ReString::char_map.size();
+        cache.clear();
+        cache.resize(size, false);
+
+        for(auto& [code, data]: ReString::hanzi_data){
+            for(const auto& c : conds){
+                if(!c->match(code)){
+                    cache[code] = false;
+                    break;
+                }
+            }
+        }
+    }
 };
 
 struct OptionCond: Cond{
@@ -283,6 +337,24 @@ struct OptionCond: Cond{
         }
         return false;
     }
+
+    void init() override {
+        for(const auto& c : conds){
+            c->init();
+        }
+        auto size = ReString::char_map.size();
+        cache.clear();
+        cache.resize(size, false);
+
+        for(auto& [code, data]: ReString::hanzi_data){
+            for(const auto& c : conds){
+                if(c->match(code)){
+                    cache[code] = true;
+                    break;
+                }
+            }
+        }
+    }
 };
 
 struct CondList: Cond{
@@ -304,10 +376,8 @@ struct CondList: Cond{
     virtual bool match_all(const ReString& s){
         if(s.size() != conds.size())
             return false;
-        for(size_t i=0; i<conds.size(); i++){
-            auto baseCond = conds[i];
-            auto data = ReString::getHanziData(s[i]);
-            if(!baseCond->match(data))
+        for(size_t i = 0; i < s.size(); ++i){
+            if(!conds[i]->match(s[i]))
                 return false;
         }
         return true;
@@ -316,10 +386,16 @@ struct CondList: Cond{
     virtual bool match(const HanziData&) const override {
         throw std::logic_error("kernel error: CondList::match(uint16_t) is not supported.");
     }
+
+    void init() override {
+        for(const auto& c : conds){
+            c->init();
+        }
+    }
 };
 
-std::shared_ptr<BaseCond> parseBaseCond(utf8stream& stream);
-std::shared_ptr<CombCond> parseCombCond(utf8stream& stream);
-std::shared_ptr<OptionCond> parseOptionCond(utf8stream& stream);
-std::shared_ptr<CondList> parseCondList(utf8stream& stream);
 std::shared_ptr<CondList> parseCond(const std::string& condStr);
+std::shared_ptr<BaseCond> parseBaseCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
+std::shared_ptr<CombCond> parseCombCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
+std::shared_ptr<OptionCond> parseOptionCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
+std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);

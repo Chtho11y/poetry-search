@@ -131,7 +131,10 @@ public:
         if(!cond){
             throw std::runtime_error("Failed to parse condition string");
         }
+        int tim = clock();
         auto results = db_.findSentencesByCond(*cond);
+        tim = clock() - tim;
+        std::cout << "Found " << results.size() << " results in " << (tim / 1000.0) << " seconds." << std::endl;
         std::vector<std::pair<std::string, size_t>> converted_results;
         
         for (const auto& [sentence, id] : results) {
@@ -160,6 +163,10 @@ public:
             return cond->toString();
         }
         return "Invalid condition";
+    }
+
+    static void test() {
+        
     }
 };
 
@@ -196,9 +203,11 @@ PYBIND11_MODULE(poetry_search, m) {
              "Estimate memory usage of the database")
         .def("get_memory_usage", &Database::get_memory_usage,
                     "Get memory usage of character mapping tables and database")
-        .def("find_sentences_by_cond", &Database::find_sentences_by_cond,
+        .def("match", &Database::find_sentences_by_cond,
              "Find sentences matching specified conditions",
              py::arg("cond_str"))
+        .def_static("test", &Database::test,
+             "Test the condition string tokenizer")
         .def_static("get_char_info", &Database::get_char_info,
                     "Get Hanzi information by character index",
                     py::arg("index"))

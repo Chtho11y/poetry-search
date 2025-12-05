@@ -189,6 +189,7 @@ std::vector<ReString> PoetryDatabase::splitSentences(const ReString& content) {
 std::vector<std::pair<ReString, size_t>>
 PoetryDatabase::findSentencesByCond(CondList& cond_list){
     std::vector<std::pair<ReString, size_t>> result;
+    cond_list.init();
 
     // step2: 遍历所有诗句
     for (const auto& item : getAllPoetry()) {
