@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "restring.h"
+#include "cond_parser.h"
 
 struct PoetryItem {
     std::string dynasty;
@@ -33,6 +34,10 @@ public:
 
     std::vector<std::pair<ReString, size_t>> 
     findSentencesByCharSet(const std::string& charset_utf8);
+
+    std::vector<std::pair<ReString, size_t>>
+    findSentencesByCond(CondList& cond_list);
+
 
     PoetryItem getPoetryById(size_t id) const;
 

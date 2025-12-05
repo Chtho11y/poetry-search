@@ -103,12 +103,17 @@ struct Cond{
     };
 
     CondType type;
+    std::unordered_map<uint16_t, bool> matchCache;
 
     Cond(){}
     virtual ~Cond() = default;
 
     virtual std::string toString() const {
         return "BaseCond";
+    }
+
+    virtual bool match(const HanziData& data) const {
+        return false;
     }
 };
 
@@ -130,6 +135,10 @@ struct CharCond: BaseCond{
     std::string toString() const override {
         return "\'" + ReString::codepointToString(ReString::getUtf8Code(ch)) + "\'";
     }
+
+    virtual bool match(const HanziData& data) const override {
+        return data.index == ch;
+    }
 };
 
 struct WildcardCond: BaseCond{
@@ -137,6 +146,10 @@ struct WildcardCond: BaseCond{
 
     std::string toString() const override {
         return "Any";
+    }
+
+    virtual bool match(const HanziData&) const override {
+        return true;
     }
 };
 
@@ -150,6 +163,10 @@ struct FreqCond: BaseCond{
     std::string toString() const override {
         return "Freq=" + std::to_string(freq);
     }
+
+    virtual bool match(const HanziData& data) const override {
+        return data.frequency <= freq;
+    }
 };
 
 struct StrokeCond: BaseCond{
@@ -161,6 +178,10 @@ struct StrokeCond: BaseCond{
 
     std::string toString() const override {
         return "Stroke=" + std::to_string(strokes);
+    }
+
+    virtual bool match(const HanziData& data) const override {
+        return data.strokes == strokes;
     }
 };
 
@@ -178,6 +199,20 @@ struct StructCond: BaseCond{
     std::string toString() const override {
         return "Struct=" + std::string(1, group) + (subGroup > 0 ? std::to_string(subGroup) : "");
     }
+
+    virtual bool match(const HanziData& data) const override {
+        if(data.structure.size() == 0)
+            return false;
+        if(data.structure[0] != group)
+            return false;
+        if(subGroup > 0){
+            if(data.structure.size() < 2)
+                return false;
+            if(data.structure[1] - '0' != subGroup)
+                return false;
+        }
+        return true;
+    }
 };
 
 struct PinyinCond: BaseCond{
@@ -189,6 +224,14 @@ struct PinyinCond: BaseCond{
 
     std::string toString() const override {
         return "Pinyin=" + pinyin;
+    }
+
+    virtual bool match(const HanziData& data) const override {
+        for(const auto& py : data.pinyin){
+            if(py == pinyin)
+                return true;
+        }
+        return false;
     }
 };
 
@@ -207,6 +250,14 @@ struct CombCond: Cond{
         result += "]";
         return result;
     }
+
+    virtual bool match(const HanziData& data) const override {
+        for(const auto& c : conds){
+            if(!c->match(data))
+                return false;
+        }
+        return true;
+    }
 };
 
 struct OptionCond: Cond{
@@ -224,6 +275,14 @@ struct OptionCond: Cond{
         result += "}";
         return result;
     }
+
+    virtual bool match(const HanziData& data) const override {
+        for(const auto& c : conds){
+            if(c->match(data))
+                return true;
+        }
+        return false;
+    }
 };
 
 struct CondList: Cond{
@@ -240,6 +299,22 @@ struct CondList: Cond{
         }
         result += ")";
         return result;
+    }
+
+    virtual bool match_all(const ReString& s){
+        if(s.size() != conds.size())
+            return false;
+        for(size_t i=0; i<conds.size(); i++){
+            auto baseCond = conds[i];
+            auto data = ReString::getHanziData(s[i]);
+            if(!baseCond->match(data))
+                return false;
+        }
+        return true;
+    }
+
+    virtual bool match(const HanziData&) const override {
+        throw std::logic_error("kernel error: CondList::match(uint16_t) is not supported.");
     }
 };
 

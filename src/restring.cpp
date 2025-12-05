@@ -163,3 +163,14 @@ bool ReString::loadHanziData(const std::string& filename) {
     }
     return true;
 }
+
+HanziData& ReString::getHanziData(uint16_t code){
+    if(hanzi_data.find(code) != hanzi_data.end()){
+        return hanzi_data.at(code);
+    }else{
+        auto data = HanziData{};
+        data.index = code;
+        hanzi_data[code] = data;
+        return hanzi_data.at(code);
+    }
+}

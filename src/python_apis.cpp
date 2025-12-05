@@ -126,6 +126,21 @@ public:
         return ReString::estimateMapMemoryUse() + db_.estimateMemoryUsage();
     }
 
+    std::vector<std::pair<std::string, size_t>> find_sentences_by_cond(const std::string& cond_str) {
+        auto cond = parseCond(cond_str);
+        if(!cond){
+            throw std::runtime_error("Failed to parse condition string");
+        }
+        auto results = db_.findSentencesByCond(*cond);
+        std::vector<std::pair<std::string, size_t>> converted_results;
+        
+        for (const auto& [sentence, id] : results) {
+            converted_results.emplace_back(sentence.toString(), id);
+        }
+        
+        return converted_results;
+    }
+
     static size_t get_mapped_char_count() {
         return ReString::char_map.size();
     }
@@ -181,6 +196,9 @@ PYBIND11_MODULE(poetry_search, m) {
              "Estimate memory usage of the database")
         .def("get_memory_usage", &Database::get_memory_usage,
                     "Get memory usage of character mapping tables and database")
+        .def("find_sentences_by_cond", &Database::find_sentences_by_cond,
+             "Find sentences matching specified conditions",
+             py::arg("cond_str"))
         .def_static("get_char_info", &Database::get_char_info,
                     "Get Hanzi information by character index",
                     py::arg("index"))

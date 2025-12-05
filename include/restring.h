@@ -63,6 +63,8 @@ struct ReString : std::vector<uint16_t> {
     static size_t estimateMapMemoryUse();
 
     static bool loadHanziData(const std::string& filename);
+
+    static HanziData& getHanziData(uint16_t code);
 };
 
 struct HanziData {

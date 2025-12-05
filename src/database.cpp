@@ -185,3 +185,20 @@ std::vector<ReString> PoetryDatabase::splitSentences(const ReString& content) {
     }
     return result;
 }
+
+std::vector<std::pair<ReString, size_t>>
+PoetryDatabase::findSentencesByCond(CondList& cond_list){
+    std::vector<std::pair<ReString, size_t>> result;
+
+    // step2: 遍历所有诗句
+    for (const auto& item : getAllPoetry()) {
+        for (const auto& sent : item.sentences) {
+            if(cond_list.match_all(sent)){
+                result.emplace_back(sent, item.id);
+                break; // 该诗出现一次即可
+            }
+        }
+    }
+
+    return result;
+}
