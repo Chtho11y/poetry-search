@@ -126,7 +126,7 @@ public:
         return ReString::estimateMapMemoryUse() + db_.estimateMemoryUsage();
     }
 
-    std::vector<std::pair<std::string, size_t>> find_sentences_by_cond(const std::string& cond_str) {
+    std::vector<std::pair<std::string, size_t>> find_sentences_by_cond(const std::string& cond_str, int len) {
         auto cond = parseCond(cond_str);
         if(!cond){
             throw std::runtime_error("Failed to parse condition string");
@@ -138,7 +138,8 @@ public:
         std::vector<std::pair<std::string, size_t>> converted_results;
         
         for (const auto& [sentence, id] : results) {
-            converted_results.emplace_back(sentence.toString(), id);
+            if(len == -1 || sentence.size() == len)
+                converted_results.emplace_back(sentence.toString(), id);
         }
         
         return converted_results;
@@ -205,7 +206,7 @@ PYBIND11_MODULE(poetry_search, m) {
                     "Get memory usage of character mapping tables and database")
         .def("match", &Database::find_sentences_by_cond,
              "Find sentences matching specified conditions",
-             py::arg("cond_str"))
+             py::arg("cond_str"), py::arg("len") = -1)
         .def_static("test", &Database::test,
              "Test the condition string tokenizer")
         .def_static("get_char_info", &Database::get_char_info,

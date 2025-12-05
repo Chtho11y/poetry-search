@@ -129,6 +129,13 @@ std::shared_ptr<OptionCond> parseOptionCond(const std::vector<cond_token>& token
 
 std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end){
     auto condList = std::make_shared<CondList>();
+    if(pos >= pos_end)
+        return condList;
+    if(tokens[pos].type == cond_token::TokenType::Lt){
+        condList = std::make_shared<UnorderedCondList>();
+        pos_end = tokens[pos].nxt_pos;
+        pos++;
+    }
     while(pos < pos_end){
         auto& token = tokens[pos];
         if(token.type == cond_token::TokenType::LBracket){

@@ -46,7 +46,10 @@ struct Cond{
         Base,
         Comb,
         Option,
-        List
+        List,
+        UnorderedList,
+        ListAnd,
+        ListOr
     };
 
     enum class BaseCondType{
@@ -394,6 +397,73 @@ struct CondList: Cond{
 
     virtual bool match(const HanziData&) const override {
         throw std::logic_error("kernel error: CondList::match(uint16_t) is not supported.");
+    }
+
+    void init() override {
+        for(const auto& c : conds){
+            c->init();
+        }
+    }
+};
+
+struct UnorderedCondList: CondList{
+    UnorderedCondList(){
+        type = Cond::CondType::UnorderedList;
+    }
+
+    std::string toString() const override {
+        std::string result = "UnorderedCondList: ( ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += ")";
+        return result;
+    }
+
+    virtual bool match_all(const ReString& s){
+        if(s.size() > conds.size())
+            return false;
+        std::vector<std::vector<bool>> sat(s.size(), std::vector<bool>(conds.size(), false));
+        for(size_t i = 0; i < s.size(); ++i){
+            for(size_t j = 0; j < conds.size(); ++j){
+                sat[i][j] = conds[j]->match(s[i]);
+            }
+        }
+        return binary_match(sat, s.size(), conds.size());
+    }
+
+    virtual bool match(const HanziData&) const override {
+        throw std::logic_error("kernel error: UnorderedCondList::match(uint16_t) is not supported.");
+    }
+
+    bool binary_match(std::vector<std::vector<bool>>& sat, int m, int n){
+        std::vector<int> matchR(n, -1);
+        std::vector<bool> visited(n);
+        
+        // DFS function to find augmenting path
+        std::function<bool(int)> dfs = [&](int u) -> bool {
+            for (int v = 0; v < n; ++v) {
+                if (sat[u][v] && !visited[v]) {
+                    visited[v] = true;
+                    if (matchR[v] == -1 || dfs(matchR[v])) {
+                        matchR[v] = u;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        
+        // Try to match each character in string
+        int result = 0;
+        for (int u = 0; u < m; ++u) {
+            visited.assign(n, false);
+            if (dfs(u)) {
+                result++;
+            }
+        }
+        
+        return result >= m;
     }
 
     void init() override {
