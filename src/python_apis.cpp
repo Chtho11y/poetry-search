@@ -9,7 +9,7 @@
 
 namespace py = pybind11;
 
-struct HanziPyInfo {
+struct PyHanziInfo {
     std::string character;
     std::string traditional;
     int strokes;
@@ -19,7 +19,7 @@ struct HanziPyInfo {
     std::vector<std::string> chaizi;
     std::vector<std::string> pinyin;
 
-    HanziPyInfo(const HanziData& hd)
+    PyHanziInfo(const HanziData& hd)
         : character(hd.character.toString()),
           traditional(hd.traditional.toString()),
           strokes(hd.strokes),
@@ -54,6 +54,33 @@ struct HanziPyInfo {
     }
 };
 
+struct PyPoetryItem {
+    size_t id;
+    std::string title;
+    std::string author;
+    std::string dynasty;
+    std::string content;
+    std::vector<std::string> sentences;
+
+    PyPoetryItem(const PoetryItem& item)
+        : id(item.id),
+          title(item.title),
+          author(item.author),
+          dynasty(item.dynasty),
+          content(item.content.toString()) {
+        for (const auto& sentence : item.sentences) {
+            sentences.push_back(sentence.toString());
+        }
+    }
+
+    std::string toString(){
+        std::string result;
+        result += title + "\n";
+        result += "["+ dynasty + "] " + author;
+        result += "\n" + content + "\n";
+    }
+};
+
 class Database {
 private:
     PoetryDatabase db_;
@@ -83,35 +110,10 @@ public:
         return res;
     }
 
-    std::vector<std::pair<std::string, size_t>> find_sentences_by_charset(const std::string& charset) {
-        auto results = db_.findSentencesByCharSet(charset);
-        std::vector<std::pair<std::string, size_t>> converted_results;
+    PyPoetryItem get_poetry_by_id(size_t id) const {
+        auto& item = db_.getPoetryById(id);
         
-        for (const auto& [sentence, id] : results) {
-            converted_results.emplace_back(sentence.toString(), id);
-        }
-        
-        return converted_results;
-    }
-
-    py::dict get_poetry_by_id(size_t id) const {
-        auto item = db_.getPoetryById(id);
-        
-        py::dict result;
-        result["id"] = item.id;
-        result["title"] = item.title;
-        result["author"] = item.author;
-        result["dynasty"] = item.dynasty;
-        result["content"] = item.content.toString();
-        
-        // 转换句子列表
-        py::list sentences;
-        for (const auto& sentence : item.sentences) {
-            sentences.append(sentence.toString());
-        }
-        result["sentences"] = sentences;
-        
-        return result;
+        return PyPoetryItem(item);
     }
 
     size_t get_poetry_count() const {
@@ -149,10 +151,10 @@ public:
         return ReString::char_map.size();
     }
 
-    static HanziPyInfo get_char_info(int index) {
+    static PyHanziInfo get_char_info(int index) {
         auto it = ReString::hanzi_data.find(static_cast<uint16_t>(index));
         if (it != ReString::hanzi_data.end()) {
-            return HanziPyInfo(it->second);
+            return PyHanziInfo(it->second);
         } else {
             throw std::runtime_error("Character index not found");
         }
@@ -174,16 +176,26 @@ public:
 PYBIND11_MODULE(poetry_search, m) {
     m.doc() = "Chinese poetry search library";
 
-    py::class_<HanziPyInfo>(m, "HanziInfo")
-        .def_readonly("character", &HanziPyInfo::character)
-        .def_readonly("traditional", &HanziPyInfo::traditional)
-        .def_readonly("strokes", &HanziPyInfo::strokes)
-        .def_readonly("frequency", &HanziPyInfo::frequency)
-        .def_readonly("radicals", &HanziPyInfo::radicals)
-        .def_readonly("structure", &HanziPyInfo::structure)
-        .def_readonly("chaizi", &HanziPyInfo::chaizi)
-        .def_readonly("pinyin", &HanziPyInfo::pinyin)
-        .def("__str__", &HanziPyInfo::toString,
+    py::class_<PyPoetryItem>(m, "PoetryItem")
+        .def_readonly("id", &PyPoetryItem::id)
+        .def_readonly("title", &PyPoetryItem::title)
+        .def_readonly("author", &PyPoetryItem::author)
+        .def_readonly("dynasty", &PyPoetryItem::dynasty)
+        .def_readonly("content", &PyPoetryItem::content)
+        .def_readonly("sentences", &PyPoetryItem::sentences)
+        .def("__str__", &PyPoetryItem::toString,
+             "Get string representation of the poetry item");
+
+    py::class_<PyHanziInfo>(m, "HanziInfo")
+        .def_readonly("character", &PyHanziInfo::character)
+        .def_readonly("traditional", &PyHanziInfo::traditional)
+        .def_readonly("strokes", &PyHanziInfo::strokes)
+        .def_readonly("frequency", &PyHanziInfo::frequency)
+        .def_readonly("radicals", &PyHanziInfo::radicals)
+        .def_readonly("structure", &PyHanziInfo::structure)
+        .def_readonly("chaizi", &PyHanziInfo::chaizi)
+        .def_readonly("pinyin", &PyHanziInfo::pinyin)
+        .def("__str__", &PyHanziInfo::toString,
              "Get string representation of the Hanzi information");
 
     py::class_<Database>(m, "Database")
@@ -193,20 +205,28 @@ PYBIND11_MODULE(poetry_search, m) {
         .def("load_hanzi_info", &Database::load_hanzi_info,
              "Load hanzi information from JSON file",
              py::arg("filename"))
-        .def("covered", &Database::find_sentences_by_charset, 
-             "Find sentences that only contain specified characters",
-             py::arg("charset"))
-        .def("get_poetry_by_id", &Database::get_poetry_by_id,
+
+        .def("get_poetry", &Database::get_poetry_by_id,
              "Get poetry details by ID", py::arg("id"))
+        
+        
+        
+        .def("match", &Database::find_sentences_by_cond,
+             "Find sentences matching specified conditions",
+             py::arg("cond_str"), py::arg("len") = -1)
+
         .def("get_poetry_count", &Database::get_poetry_count,
              "Get total number of poetry items")
         .def("estimate_memory_usage", &Database::estimate_memory_usage,
              "Estimate memory usage of the database")
         .def("get_memory_usage", &Database::get_memory_usage,
                     "Get memory usage of character mapping tables and database")
-        .def("match", &Database::find_sentences_by_cond,
-             "Find sentences matching specified conditions",
-             py::arg("cond_str"), py::arg("len") = -1)
+        
+        .def("__len__", &Database::get_poetry_count,
+             "Get total number of poetry items")
+        .def("__getitem__", &Database::get_poetry_by_id,
+             "Get poetry details by ID", py::arg("id"))
+    
         .def_static("test", &Database::test,
              "Test the condition string tokenizer")
         .def_static("get_char_info", &Database::get_char_info,

@@ -473,6 +473,31 @@ struct UnorderedCondList: CondList{
     }
 };
 
+struct AndCondList: CondList{
+    AndCondList(){
+        type = Cond::CondType::ListAnd;
+    }
+
+    std::string toString() const override {
+        std::string result = "And: [ ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += "]";
+        return result;
+    }
+
+    virtual bool match_all(const ReString& s){
+        if(s.size() != conds.size())
+            return false;
+        for(size_t i = 0; i < s.size(); ++i){
+            if(!conds[i]->match(s[i]))
+                return false;
+        }
+        return true;
+    }
+};
+
 std::shared_ptr<CondList> parseCond(const std::string& condStr);
 std::shared_ptr<BaseCond> parseBaseCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
 std::shared_ptr<CombCond> parseCombCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
