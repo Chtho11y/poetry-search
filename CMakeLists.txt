@@ -13,6 +13,7 @@ endif()
 add_subdirectory(./third-party/pybind11)
 
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(OpenMP REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/third-party)
@@ -20,3 +21,4 @@ include_directories(${CMAKE_SOURCE_DIR}/third-party)
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
 pybind11_add_module(poetry_search ${SOURCES})
+target_link_libraries(poetry_search PRIVATE OpenMP::OpenMP_CXX)

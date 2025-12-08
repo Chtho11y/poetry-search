@@ -5,6 +5,7 @@
 
 #include "database.h"
 #include "cond_parser.h"
+#include "executor.h"
 
 
 namespace py = pybind11;
@@ -78,6 +79,44 @@ struct PyPoetryItem {
         result += title + "\n";
         result += "["+ dynasty + "] " + author;
         result += "\n" + content + "\n";
+        return result;
+    }
+};
+
+struct PyQueryResult {
+    std::vector<QueryResult> res;
+    PoetryDatabase* db;
+
+    PyQueryResult(std::vector<QueryResult> res, PoetryDatabase* db)
+        : res(res), db(db) {}
+
+    PyPoetryItem get(size_t index) const {
+        return db->getPoetryById(res.at(index).poetry_id);
+    }
+
+    std::pair<size_t, std::vector<size_t>> get_matched_info(size_t index) const {
+        return {res.at(index).poetry_id, res.at(index).match_positions};
+    }
+
+    size_t size() const {
+        return res.size();
+    }
+
+    std::string toString(){
+        return show(5);
+    }
+
+    std::string show(size_t lim){
+        lim = std::min(lim, res.size());
+        std::string result;
+        for(size_t i = 0; i < lim; i++){
+            auto& item = db->getPoetryById(res.at(i).poetry_id);
+            result += item.sentences[res.at(i).match_positions[0]].toString();
+            result += "<<" + item.title + ">>";
+            result += " [" + item.dynasty + "] " + item.author;
+            result += "\n";
+        }
+        return result;
     }
 };
 
@@ -128,23 +167,18 @@ public:
         return ReString::estimateMapMemoryUse() + db_.estimateMemoryUsage();
     }
 
-    std::vector<std::pair<std::string, size_t>> find_sentences_by_cond(const std::string& cond_str, int len) {
-        auto cond = parseCond(cond_str);
+    PyQueryResult match(const std::string& query) {
+        auto cond = parseCond(query);
         if(!cond){
-            throw std::runtime_error("Failed to parse condition string");
+            throw std::runtime_error("Failed to parse query string");
         }
+        auto matcher = cond->compile();
         int tim = clock();
-        auto results = db_.findSentencesByCond(*cond);
+        Executor<ExecuteStrategy::Parallel> executor;
+        auto results = executor.execute(matcher, db_.getAllPoetry());
         tim = clock() - tim;
         std::cout << "Found " << results.size() << " results in " << (tim / 1000.0) << " seconds." << std::endl;
-        std::vector<std::pair<std::string, size_t>> converted_results;
-        
-        for (const auto& [sentence, id] : results) {
-            if(len == -1 || sentence.size() == len)
-                converted_results.emplace_back(sentence.toString(), id);
-        }
-        
-        return converted_results;
+        return PyQueryResult(results, &db_);
     }
 
     static size_t get_mapped_char_count() {
@@ -163,7 +197,9 @@ public:
     static std::string parse_cond(const std::string& cond_str) {
         auto cond = parseCond(cond_str);
         if(cond){
-            return cond->toString();
+            // return cond->toString();
+            auto mather = cond->compile();
+            return mather.to_string();
         }
         return "Invalid condition";
     }
@@ -197,6 +233,18 @@ PYBIND11_MODULE(poetry_search, m) {
         .def_readonly("pinyin", &PyHanziInfo::pinyin)
         .def("__str__", &PyHanziInfo::toString,
              "Get string representation of the Hanzi information");
+    
+    py::class_<PyQueryResult>(m, "QueryResult")
+        .def("get_poetry", &PyQueryResult::get_matched_info,
+             "Get poetry details by ID", py::arg("id"))
+        .def("__len__", &PyQueryResult::size,
+             "Get the number of results")
+        .def("__getitem__", &PyQueryResult::get,
+             "Get poetry details by index", py::arg("index"))
+        .def("__str__", &PyQueryResult::toString,
+             "Get string representation of the query result")
+        .def("__repr__", &PyQueryResult::toString,
+             "Get string representation of the query result");
 
     py::class_<Database>(m, "Database")
         .def(py::init<>())
@@ -211,9 +259,9 @@ PYBIND11_MODULE(poetry_search, m) {
         
         
         
-        .def("match", &Database::find_sentences_by_cond,
+        .def("match", &Database::match,
              "Find sentences matching specified conditions",
-             py::arg("cond_str"), py::arg("len") = -1)
+             py::arg("query"))
 
         .def("get_poetry_count", &Database::get_poetry_count,
              "Get total number of poetry items")

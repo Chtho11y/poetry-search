@@ -32,13 +32,6 @@ public:
 
     size_t estimateMemoryUsage() const;
 
-    std::vector<std::pair<ReString, size_t>> 
-    findSentencesByCharSet(const std::string& charset_utf8);
-
-    std::vector<std::pair<ReString, size_t>>
-    findSentencesByCond(CondList& cond_list);
-
-
     PoetryItem getPoetryById(size_t id) const;
 
     static std::vector<ReString> splitSentences(const ReString& content);

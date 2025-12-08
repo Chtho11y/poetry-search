@@ -8,6 +8,7 @@
 #include <regex>
 
 #include "restring.h"
+#include "matcher.h"
 
 std::pair<uint32_t, uint32_t> readUTF8Char(const std::string& str, size_t& pos, bool movePos = true);
 
@@ -41,7 +42,10 @@ struct cond_token{
 
 std::vector<cond_token> tokenizeCondString(const std::string& condStr);
 
-struct Cond{
+struct Cond: std::enable_shared_from_this<Cond>{
+
+    using CondMatcher = Matcher<Cond>;
+
     enum class CondType{
         Base,
         Comb,
@@ -91,9 +95,15 @@ struct Cond{
             cache[code] = match(data);
         }
     }
+
+    virtual CondMatcher compile(){
+        init();
+        return CondMatcher::create_single_matcher(cache, this->shared_from_this());
+    }
 };
 
 using cond_ptr = std::shared_ptr<Cond>;
+using cond_matcher = Matcher<Cond>;
 
 struct BaseCond: Cond{
     Cond::BaseCondType baseType = Cond::BaseCondType::Character;
@@ -115,10 +125,6 @@ struct CharCond: BaseCond{
     virtual bool match(const HanziData& data) const override {
         return data.index == ch;
     }
-
-    // void init() override {
-    //     //no op
-    // }
 };
 
 struct WildcardCond: BaseCond{
@@ -131,10 +137,6 @@ struct WildcardCond: BaseCond{
     virtual bool match(const HanziData&) const override {
         return true;
     }
-
-    // void init() override {
-    //     //no op
-    // }
 };
 
 struct FreqCond: BaseCond{
@@ -385,16 +387,6 @@ struct CondList: Cond{
         return result;
     }
 
-    virtual bool match_all(const ReString& s){
-        if(s.size() != conds.size())
-            return false;
-        for(size_t i = 0; i < s.size(); ++i){
-            if(!conds[i]->match(s[i]))
-                return false;
-        }
-        return true;
-    }
-
     virtual bool match(const HanziData&) const override {
         throw std::logic_error("kernel error: CondList::match(uint16_t) is not supported.");
     }
@@ -403,6 +395,14 @@ struct CondList: Cond{
         for(const auto& c : conds){
             c->init();
         }
+    }
+
+    CondMatcher compile() override {
+        std::vector<CondMatcher> matchers;
+        for(const auto& c : conds){
+            matchers.push_back(c->compile());
+        }
+        return CondMatcher::create_seq_matcher(matchers, this->shared_from_this());
     }
 };
 
@@ -420,56 +420,22 @@ struct UnorderedCondList: CondList{
         return result;
     }
 
-    virtual bool match_all(const ReString& s){
-        if(s.size() > conds.size())
-            return false;
-        std::vector<std::vector<bool>> sat(s.size(), std::vector<bool>(conds.size(), false));
-        for(size_t i = 0; i < s.size(); ++i){
-            for(size_t j = 0; j < conds.size(); ++j){
-                sat[i][j] = conds[j]->match(s[i]);
-            }
-        }
-        return binary_match(sat, s.size(), conds.size());
-    }
-
     virtual bool match(const HanziData&) const override {
         throw std::logic_error("kernel error: UnorderedCondList::match(uint16_t) is not supported.");
-    }
-
-    bool binary_match(std::vector<std::vector<bool>>& sat, int m, int n){
-        std::vector<int> matchR(n, -1);
-        std::vector<bool> visited(n);
-        
-        // DFS function to find augmenting path
-        std::function<bool(int)> dfs = [&](int u) -> bool {
-            for (int v = 0; v < n; ++v) {
-                if (sat[u][v] && !visited[v]) {
-                    visited[v] = true;
-                    if (matchR[v] == -1 || dfs(matchR[v])) {
-                        matchR[v] = u;
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-        
-        // Try to match each character in string
-        int result = 0;
-        for (int u = 0; u < m; ++u) {
-            visited.assign(n, false);
-            if (dfs(u)) {
-                result++;
-            }
-        }
-        
-        return result >= m;
     }
 
     void init() override {
         for(const auto& c : conds){
             c->init();
         }
+    }
+
+    CondMatcher compile() override {
+        std::vector<CondMatcher> matchers;
+        for(const auto& c : conds){
+            matchers.push_back(c->compile());
+        }
+        return CondMatcher::create_bipartite_matcher(matchers, this->shared_from_this());
     }
 };
 
@@ -487,14 +453,12 @@ struct AndCondList: CondList{
         return result;
     }
 
-    virtual bool match_all(const ReString& s){
-        if(s.size() != conds.size())
-            return false;
-        for(size_t i = 0; i < s.size(); ++i){
-            if(!conds[i]->match(s[i]))
-                return false;
+    CondMatcher compile() override {
+        std::vector<CondMatcher> matchers;
+        for(const auto& c : conds){
+            matchers.push_back(c->compile());
         }
-        return true;
+        return CondMatcher::create_logic_matcher(matchers, CondMatcher::And, this->shared_from_this());
     }
 };
 

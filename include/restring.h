@@ -10,20 +10,19 @@
 
 using json = nlohmann::json;
 
-// 汉字数据结构
+
 struct HanziDataJson {
     int index;
     std::string character;
-    std::string traditional;  // 可能为空
+    std::string traditional;  // Nullable
     int strokes;
     std::vector<std::string> pinyin;
     std::string radicals;
     int frequency;
     std::string structure;
-    std::vector<std::string> chaizi;  // 可能为空
+    std::vector<std::string> chaizi;  // Nullable
 };
 
-// 读取汉字数据文件的函数
 std::optional<std::vector<HanziDataJson>> readHanziData(const std::string& filename);
 
 struct ReString;

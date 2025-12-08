@@ -89,39 +89,6 @@ size_t PoetryDatabase::estimateMemoryUsage() const {
     return total;
 }
 
-std::vector<std::pair<ReString, size_t>> 
-PoetryDatabase::findSentencesByCharSet(const std::string& charset_utf8) 
-{
-    // step1: 把 charset 转成 code 集合
-    ReString rs(charset_utf8, false); // false: 不新增新字符
-    std::unordered_set<uint16_t> allowed;
-    for (auto c : rs) {
-        if (c != ReString::getIllegalCode())
-            allowed.insert(c);
-    }
-
-    std::vector<std::pair<ReString, size_t>> result;
-
-    // step2: 遍历所有诗句
-    for (const auto& item : getAllPoetry()) {
-        for (const auto& sent : item.sentences) {
-            bool ok = true;
-            for (auto ch : sent) {
-                if (!allowed.count(ch)) { 
-                    ok = false; 
-                    break; 
-                }
-            }
-            if (ok) {
-                result.emplace_back(sent, item.id);
-                break; // 该诗出现一次即可
-            }
-        }
-    }
-
-    return result;
-}
-
 PoetryItem PoetryDatabase::getPoetryById(size_t id) const {
     return poetry_items_.at(id);
 }
@@ -183,23 +150,5 @@ std::vector<ReString> PoetryDatabase::splitSentences(const ReString& content) {
     if (!current_sentence.empty()) {
         result.push_back(current_sentence);
     }
-    return result;
-}
-
-std::vector<std::pair<ReString, size_t>>
-PoetryDatabase::findSentencesByCond(CondList& cond_list){
-    std::vector<std::pair<ReString, size_t>> result;
-    cond_list.init();
-
-    // step2: 遍历所有诗句
-    for (const auto& item : getAllPoetry()) {
-        for (const auto& sent : item.sentences) {
-            if(cond_list.match_all(sent)){
-                result.emplace_back(sent, item.id);
-                break; // 该诗出现一次即可
-            }
-        }
-    }
-
     return result;
 }
