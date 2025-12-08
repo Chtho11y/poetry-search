@@ -13,17 +13,17 @@ std::pair<uint32_t, uint32_t> readUTF8Char(const std::string& str, size_t& pos, 
     }
     if(movePos)
         pos += len;
-    return {cp, len};
+    return {cp, (uint32_t)len};
 }
 
 std::shared_ptr<BaseCond> parseBaseCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end){
     std::shared_ptr<BaseCond> baseCond = nullptr;
 
     if(pos >= pos_end)
-        throw ParseException("unexpected end of condition", 0, 0);
+        throw ParseException("unexpected end of condition", pos, pos);
 
     auto& token = tokens[pos];
-    if(token.type == cond_token::TokenType::Asterisk){
+    if(token.type == cond_token::TokenType::Hash){
         baseCond = std::make_shared<WildcardCond>();
         pos++;
     }else if(token.type == cond_token::TokenType::Dollar){
@@ -129,11 +129,11 @@ std::shared_ptr<OptionCond> parseOptionCond(const std::vector<cond_token>& token
 
 std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end){
     auto condList = std::make_shared<CondList>();
-    if(pos >= pos_end)
-        return condList;
-    if(tokens[pos].type == cond_token::TokenType::Lt){
+    if(pos >= pos_end){
+        throw ParseException("missing condition", pos, pos);
+    }
+    if(tokens[pos].type == cond_token::TokenType::Lt && tokens[pos].nxt_pos == pos_end){
         condList = std::make_shared<UnorderedCondList>();
-        pos_end = tokens[pos].nxt_pos;
         pos++;
     }
     while(pos < pos_end){
@@ -143,6 +143,14 @@ std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, s
             auto optionCond = parseOptionCond(tokens, pos, token.nxt_pos);
             condList->conds.push_back(optionCond);
             pos++; // skip RBracket
+        }else if(token.type == cond_token::TokenType::Lt){
+            auto unorderedCond = parseCondList(tokens, pos, token.nxt_pos);
+            pos = token.nxt_pos + 1;
+            condList->conds.push_back(unorderedCond);
+        }else if(token.type == cond_token::TokenType::LParen){
+            auto subCondList = parseGlobalExpression(tokens, pos, token.nxt_pos + 1);
+            condList->conds.push_back(subCondList);
+            pos = token.nxt_pos + 1;
         }else{
             auto baseCond = parseBaseCond(tokens, pos, pos_end);
             condList->conds.push_back(baseCond);
@@ -151,10 +159,68 @@ std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, s
     return condList;
 }
 
+
+std::shared_ptr<CondList> parseGlobalExpression(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end){
+    if(pos >= pos_end)
+        return nullptr;
+    // std::cout << "parsing " << pos << " " << pos_end << std::endl;
+    if(tokens[pos].type == cond_token::TokenType::LParen && tokens[pos].nxt_pos + 1 == pos_end){
+        pos++;
+        return parseGlobalExpression(tokens, pos, pos_end - 1);
+    }
+
+    auto get_priority_left = [](cond_token::TokenType type) -> int {
+        switch(type){
+            case cond_token::TokenType::And:
+                return 0;
+            case cond_token::TokenType::Or:
+                return 2;
+            default:
+                return -1;
+        };
+    };
+
+    auto get_priority_right = [](cond_token::TokenType type) -> int {
+        switch(type){
+            case cond_token::TokenType::And:
+                return 1;
+            case cond_token::TokenType::Or:
+                return 3;
+            default:
+                return -1;
+        };
+    };
+
+    int max_p = -1;
+    size_t max_pos = pos;
+    // std::shared_ptr<CondList> res = nullptr;
+    for(size_t i = pos; i < pos_end; i = tokens[i].nxt_pos){
+        auto pr = get_priority_right(tokens[i].type);
+        if(pr > max_p){
+            max_p = get_priority_left(tokens[i].type);
+            max_pos = i;
+        }
+    }
+
+    if(max_p == -1)
+        return parseCondList(tokens, pos, pos_end);
+
+    auto pos_r = max_pos + 1;
+    if(max_p == 0){
+        auto left = parseGlobalExpression(tokens, pos, max_pos);
+        auto right = parseGlobalExpression(tokens, pos_r, pos_end);
+        return std::make_shared<AndCondList>(left, right);
+    }else{
+        auto left = parseGlobalExpression(tokens, pos, max_pos);
+        auto right = parseGlobalExpression(tokens, pos_r, pos_end);
+        return std::make_shared<OrCondList>(left, right);
+    }
+}
+
 std::shared_ptr<CondList> parseCond(const std::string& condStr){
     auto tokens = tokenizeCondString(condStr);
     size_t pos = 0;
-    return parseCondList(tokens, pos, tokens.size());
+    return parseGlobalExpression(tokens, pos, tokens.size());
 }
 
 void braket_match(std::vector<cond_token>& tokens){
@@ -204,6 +270,7 @@ std::vector<cond_token> tokenizeCondString(const std::string& condStr){
         { '$', cond_token::TokenType::Dollar },
         { '@', cond_token::TokenType::At },
         { '<', cond_token::TokenType::Lt },
+        { '=', cond_token::TokenType::Eq },
         { '>', cond_token::TokenType::Gt },
         { '#', cond_token::TokenType::Hash },
         { '"', cond_token::TokenType::Quote},

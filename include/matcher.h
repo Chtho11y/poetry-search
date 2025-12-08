@@ -96,9 +96,11 @@ struct Matcher{
         }
         Self matcher(strategy);
         matcher.sub_matcher = sub_matcher;
+        matcher.length_lower_bound = sub_matcher[0].length_lower_bound;
+        matcher.length_upper_bound = sub_matcher[0].length_upper_bound;
         for(auto& m : sub_matcher){
-            matcher.length_lower_bound += m.length_lower_bound;
-            matcher.length_upper_bound += m.length_upper_bound;
+            matcher.length_lower_bound = std::min(m.length_lower_bound, matcher.length_lower_bound);
+            matcher.length_upper_bound = std::max(m.length_upper_bound, matcher.length_upper_bound);
         }
         return matcher;
     }
@@ -129,6 +131,10 @@ struct Matcher{
                 return bipartite_match(str, start, end);
             case Dynamic:
                 return dynamic_match(str, start, end);
+            case And:
+                return logic_and_match(str, start, end);
+            case Or:
+                return logic_or_match(str, start, end);
         }
         return false;
     }
@@ -138,15 +144,16 @@ struct Matcher{
     }
 
     bool multi_match(const ReString& str, size_t start, size_t end) const{
-        return false;
+        throw std::logic_error("multi match not implemented");
     }
 
     bool static_match(const ReString& str, size_t start, size_t end) const{
         size_t pos = start;
         for(auto& m: sub_matcher){
-            if(!m.match(str, pos, end))
+            size_t nxt = pos + m.length_lower_bound;
+            if(!m.match(str, pos, nxt))
                 return false;
-            pos += m.length_lower_bound;
+            pos = nxt;
         }
         return pos == end;
     }
@@ -195,15 +202,28 @@ struct Matcher{
     }
 
     bool dynamic_match(const ReString& str, size_t start, size_t end) const{
-        return false;
+        throw std::logic_error("dynamic match not implemented");
     }
 
     bool logic_and_match(const ReString& str, size_t start, size_t end) const{
+        for(auto& m : sub_matcher){
+            if(!m.match(str, start, end))
+                return false;
+        }
+        return true;
+    }
+
+    bool logic_or_match(const ReString& str, size_t start, size_t end) const{
+        for(auto& m : sub_matcher){
+            if(m.match(str, start, end))
+                return true;
+        }
         return false;
     }
 
     std::string to_string(size_t indent = 0) const{
-        std::string res(indent, ' ');
+        auto indent_str = std::string(indent, ' ');
+        std::string res = indent_str;
         switch (strategy){
             case Single:
                 res += "SingleMatcher";
@@ -234,7 +254,7 @@ struct Matcher{
                 res += m.to_string(indent + 4);
                 res += "\n";
             }
-            res += ")";
+            res += indent_str + ")";
         }else if(bind_data){
             res += "(" + bind_data->toString() + ")";
         }

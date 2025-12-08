@@ -28,7 +28,7 @@ struct ParseException: public std::exception{
 struct cond_token{
     enum TokenType{
         Char, Letters, Number, LBracket, RBracket, LSquare, RSquare, 
-        Comma, Quote, Lt, Gt, At, Hash, Dollar, Asterisk, QuestionMark,
+        Comma, Quote, Lt, Eq, Gt, At, Hash, Dollar, Asterisk, QuestionMark,
         And, Or, LParen, RParen
     };
     size_t nxt_pos;
@@ -444,6 +444,12 @@ struct AndCondList: CondList{
         type = Cond::CondType::ListAnd;
     }
 
+    AndCondList(cond_ptr lhs, cond_ptr rhs){
+        type = Cond::CondType::ListAnd;
+        conds.push_back(lhs);
+        conds.push_back(rhs);
+    }
+
     std::string toString() const override {
         std::string result = "And: [ ";
         for(const auto& c : conds){
@@ -462,8 +468,38 @@ struct AndCondList: CondList{
     }
 };
 
+struct OrCondList: CondList{
+    OrCondList(){
+        type = Cond::CondType::ListOr;
+    }
+
+    OrCondList(cond_ptr lhs, cond_ptr rhs){
+        type = Cond::CondType::ListOr;
+        conds.push_back(lhs);
+        conds.push_back(rhs);
+    }
+
+    std::string toString() const override {
+        std::string result = "Or: [ ";
+        for(const auto& c : conds){
+            result += c->toString() + " ";
+        }
+        result += "]";
+        return result;
+    }
+
+    CondMatcher compile() override {
+        std::vector<CondMatcher> matchers;
+        for(const auto& c : conds){
+            matchers.push_back(c->compile());
+        }
+        return CondMatcher::create_logic_matcher(matchers, CondMatcher::Or, this->shared_from_this());
+    }
+};
+
 std::shared_ptr<CondList> parseCond(const std::string& condStr);
 std::shared_ptr<BaseCond> parseBaseCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
 std::shared_ptr<CombCond> parseCombCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
 std::shared_ptr<OptionCond> parseOptionCond(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
 std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);
+std::shared_ptr<CondList> parseGlobalExpression(const std::vector<cond_token>& tokens, size_t& pos, size_t pos_end);

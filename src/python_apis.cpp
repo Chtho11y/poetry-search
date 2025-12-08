@@ -174,7 +174,7 @@ public:
         }
         auto matcher = cond->compile();
         int tim = clock();
-        Executor<ExecuteStrategy::Parallel> executor;
+        Executor<ExecuteStrategy::Sequential> executor;
         auto results = executor.execute(matcher, db_.getAllPoetry());
         tim = clock() - tim;
         std::cout << "Found " << results.size() << " results in " << (tim / 1000.0) << " seconds." << std::endl;
