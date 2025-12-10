@@ -38,7 +38,7 @@ db.load("poetry.csv")
 db.get_poetry_count()
 db.get_memory_usage()
 
-db.match("**依山尽")
+db.match("##依山尽")
 ```
 请先导入汉字列表再导入诗歌，且不要重复导入。
 导入诗歌预计花费 5-10 秒。
