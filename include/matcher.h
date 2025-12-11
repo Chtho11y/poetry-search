@@ -148,10 +148,12 @@ struct Matcher{
     }
 
     bool static_match(const ReString& str, size_t start, size_t end) const{
+        if(start >= end || end - start != length_lower_bound)
+            return false;
         size_t pos = start;
         for(auto& m: sub_matcher){
             size_t nxt = pos + m.length_lower_bound;
-            if(!m.match(str, pos, nxt))
+            if(!m.match(str, pos, std::min(nxt, end)))
                 return false;
             pos = nxt;
         }

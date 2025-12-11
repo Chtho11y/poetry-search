@@ -127,7 +127,7 @@ std::string PoetryDatabase::trimQuotes(const std::string& str) {
     return str;
 }
 
-// 判断 codepoint 是否为我们认为的句末标点（中文/全角逗号句号问叹号等）
+
 bool PoetryDatabase::isSentenceTerminator(uint16_t ch) {
     auto cp = ReString::getUtf8Code(ch);
     return cp == 0xFF0C || cp == 0x3002 || cp == 0xFF01 || cp == 0xFF1F;
