@@ -50,6 +50,7 @@ struct Cond: std::enable_shared_from_this<Cond>{
         Base,
         Comb,
         Option,
+        Multi,
         List,
         UnorderedList,
         ListAnd,
@@ -368,6 +369,35 @@ struct OptionCond: Cond{
                 }
             }
         }
+    }
+};
+
+struct MultiCond: Cond{
+    cond_ptr conds;
+
+    MultiCond() {
+        type = Cond::CondType::Multi;
+    }
+
+    std::string toString() const override {
+        std::string result = "MultiCond:(";
+        result += conds->toString() + ")*";
+        return result;
+    }
+
+    virtual bool match(const HanziData& data) const override {
+        throw std::logic_error("kernel error: MultiCond::match(uint16_t) is not supported.");
+    }
+
+    void init() override {
+        conds->init();
+    }
+
+    CondMatcher compile() override {
+        auto matcher = conds->compile();
+        std::vector<CondMatcher> matchers;
+        matchers.push_back(matcher);
+        return CondMatcher::create_multi_matcher(matchers, this->shared_from_this());
     }
 };
 
