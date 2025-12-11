@@ -12,6 +12,7 @@ struct Matcher{
         Static,
         Bipartite,
         Dynamic,
+        Regex,
         And,
         Or,
     };
@@ -62,8 +63,12 @@ struct Matcher{
             l += m.length_lower_bound;
             u += m.length_upper_bound;
         }
-        if(l != u)
-            matcher.strategy = Self::Dynamic;
+        if(l != u){
+            if(matcher.is_support_regex())
+                matcher.strategy = Self::Regex;
+            else
+                matcher.strategy = Self::Dynamic;
+        }
         
         matcher.sub_matcher = sub_matcher;
         matcher.length_lower_bound = l;
@@ -131,6 +136,8 @@ struct Matcher{
                 return bipartite_match(str, start, end);
             case Dynamic:
                 return dynamic_match(str, start, end);
+            case Regex:
+                return regex_match(str, start, end);
             case And:
                 return logic_and_match(str, start, end);
             case Or:
@@ -203,6 +210,24 @@ struct Matcher{
         return result >= m;
     }
 
+    bool regex_match(const ReString& str, size_t start, size_t end) const{
+        char c = 'A';
+        std::string normal_str = "";
+        std::map<int16_t, char> char_map;
+        for(size_t i = start; i < end; ++i){
+            auto code = str[i];
+            if(char_map.find(code) == char_map.end()){
+                char_map[code] = c;
+                c++;
+            }
+            normal_str += char_map[code];
+        }
+        auto regex = to_regex(char_map);
+        if(!regex.has_value())
+            return false;
+        return std::regex_match(normal_str, std::regex(regex.value()));
+    }
+
     bool dynamic_match(const ReString& str, size_t start, size_t end) const{
         throw std::logic_error("dynamic match not implemented");
     }
@@ -223,6 +248,93 @@ struct Matcher{
         return false;
     }
 
+    std::optional<std::string> to_regex(std::map<int16_t, char>& char_map) const {
+        switch (strategy){
+
+        case Single:{
+            std::string str = "[";
+            for(auto [code, ch]: char_map){
+                if(cache[code]){
+                    str += ch;
+                }
+            }
+            str += "]";
+            if(str == "[]")
+                return std::nullopt;
+            return str;
+        }
+
+        case Static: case Dynamic: case Regex:{
+            std::string res = "(";
+            for(auto& m : sub_matcher){
+                auto val = m.to_regex(char_map);
+                if(!val.has_value())
+                    return std::nullopt;
+                res += val.value();
+            }
+            res += ")";
+            if(res == "()")
+                return std::nullopt;
+            return res;
+        }
+
+        case Multi:{
+            auto res = sub_matcher[0].to_regex(char_map);
+            if(!res.has_value())
+                return std::nullopt;
+            if(length_upper_bound >= INF_LENGTH)
+                return res.value() + (length_lower_bound == 0 ? "*" : "+");
+            return res.value() + "{" + std::to_string(length_lower_bound) + "," + std::to_string(length_upper_bound) + "}";
+        }
+
+        case Bipartite:{
+            throw std::logic_error("bipartite match not implemented");
+        }
+
+        case And:{
+            throw std::logic_error("logic and match not implemented");
+            // res = "(";
+            // for(auto& m : sub_matcher){
+            //     auto val = m.to_regex(char_map);
+            //     if(!val.has_value())
+            //         return std::nullopt;
+            //     res += val.value();
+            // }
+            // res += ")";
+            // return res == "()" ? std::nullopt : res;
+        }
+
+        case Or:{
+            std::string res = "(";
+            bool first = true;
+            for(auto& m : sub_matcher){
+                auto val = m.to_regex(char_map);
+                if(!val.has_value())
+                    continue;
+                if(!first)
+                    res += "|";
+                first = false;
+                res += val.value();
+            }
+            res += ")";
+            if(res == "()")
+                return std::nullopt;
+            return res;
+        }
+
+        default:
+            return std::nullopt;
+        }
+    }
+
+    bool is_support_regex() const{
+        bool res = true;
+        for(auto& m : sub_matcher){
+            res &= m.is_support_regex();
+        }
+        return res && strategy != Bipartite && strategy != And;
+    }
+
     std::string to_string(size_t indent = 0) const{
         auto indent_str = std::string(indent, ' ');
         std::string res = indent_str;
@@ -239,6 +351,9 @@ struct Matcher{
             case Bipartite:
                 res += "BipartiteMatcher";
                 break;
+            case Regex:
+                res += "SeqMatcher[Regex]";
+                break;
             case Dynamic:
                 res += "SeqMatcher[Dynamic]";
                 break;
@@ -248,6 +363,8 @@ struct Matcher{
             case Or:
                 res += "Or";
                 break;
+            default:
+                res += "Unknown";
         }
         
         if(sub_matcher.size() != 0){
