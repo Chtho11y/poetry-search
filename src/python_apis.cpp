@@ -174,7 +174,7 @@ public:
         }
         auto matcher = cond->compile();
         int tim = clock();
-        Executor<ExecuteStrategy::Sequential> executor;
+        Executor<ExecuteStrategy::Parallel> executor;
         auto results = executor.execute(matcher, db_.getAllPoetry());
         tim = clock() - tim;
         std::cout << "Found " << results.size() << " results in " << (tim / 1000.0) << " seconds." << std::endl;
@@ -237,6 +237,8 @@ PYBIND11_MODULE(poetry_search, m) {
     py::class_<PyQueryResult>(m, "QueryResult")
         .def("get_poetry", &PyQueryResult::get_matched_info,
              "Get poetry details by ID", py::arg("id"))
+        .def("show", &PyQueryResult::show,
+             "Show the query result in the console", py::arg("lim")=100)
         .def("__len__", &PyQueryResult::size,
              "Get the number of results")
         .def("__getitem__", &PyQueryResult::get,
