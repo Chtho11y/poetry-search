@@ -62,7 +62,7 @@ struct PyPoetryItem {
     std::string dynasty;
     std::string content;
     std::vector<std::string> sentences;
-
+    
     PyPoetryItem(const PoetryItem& item)
         : id(item.id),
           title(item.title),

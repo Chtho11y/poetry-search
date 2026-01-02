@@ -151,6 +151,14 @@ std::shared_ptr<CondList> parseCondList(const std::vector<cond_token>& tokens, s
             auto subCondList = parseGlobalExpression(tokens, pos, token.nxt_pos + 1);
             condList->conds.push_back(subCondList);
             pos = token.nxt_pos + 1;
+        }else if(token.type == cond_token::TokenType::Asterisk){
+            if(condList->conds.empty())
+                throw ParseException("multi match must follow a condition", pos, pos);
+            auto multiCond = std::make_shared<MultiCond>();
+            multiCond->conds = condList->conds.back();
+            condList->conds.pop_back();
+            condList->conds.push_back(multiCond);
+            pos++;
         }else{
             auto baseCond = parseBaseCond(tokens, pos, pos_end);
             condList->conds.push_back(baseCond);

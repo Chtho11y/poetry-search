@@ -79,7 +79,7 @@ uint32_t ReString::getUtf8Code(uint16_t code) {
 std::pair<uint32_t, size_t> ReString::nextUtf8Codepoint(const std::string& s, size_t pos) {
     unsigned char c = static_cast<unsigned char>(s[pos]);
     if (c <= 0x7F) return { c, 1 };
-    // 多字节序列判定
+
     if ((c & 0xE0) == 0xC0 && pos + 1 < s.size()) { // 2 bytes
         unsigned char c1 = static_cast<unsigned char>(s[pos + 1]);
         if ((c1 & 0xC0) == 0x80) {
